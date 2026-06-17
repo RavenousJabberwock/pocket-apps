@@ -306,7 +306,6 @@
     const list = loadHistory();
     const flags = [opts.reroll1 ? "rr1" : "", opts.explode ? "exp" : ""].filter(Boolean).join(",");
     list.unshift({ expr, total, flags, t: Date.now() });
-    savePresets; // no-op guard
     localStorage.setItem(LS_HISTORY, JSON.stringify(list.slice(0, 20)));
     renderHistory();
   }
