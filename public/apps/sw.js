@@ -39,6 +39,7 @@ const ASSETS = [
   "/apps/snake.html",
   "/apps/tally.html",
   "/apps/dice.html",
+  "/apps/rpg-dice.html",
   "/manifest.webmanifest",
   "/icons/app-icon.png",
 ];
