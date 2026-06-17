@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>RPG Dice</title>
+  <meta name="description" content="Tabletop dice roller: parse expressions like 12d8+4d6+1d4+6 with reroll options and saved presets." />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/app-icon.png" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    /* ---------- Theme tokens (light + dark via prefers-color-scheme) ---------- */
+    :root{
+      --bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;
+      --accent:#dc2626;--accent-fg:#fff;--muted:#64748b;--good:#16a34a;
+      --shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.05);
+    }
+    @media (prefers-color-scheme:dark){
+      :root{
+        --bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;
+        --accent:#ef4444;--accent-fg:#fff;--muted:#94a3b8;--good:#22c55e;
+        --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+      }
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}
+    .bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:520px;margin:0 auto;padding:16px}
+
+    /* ---------- Expression input ---------- */
+    .field{display:flex;gap:8px;margin-bottom:10px}
+    #expr{flex:1;font-size:18px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    button{font-family:inherit;cursor:pointer}
+    .roll{font-size:17px;padding:12px 18px;border-radius:12px;border:none;background:var(--accent);color:var(--accent-fg);font-weight:600}
+    .roll:active{transform:scale(.97)}
+
+    /* ---------- Quick dice chips ---------- */
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+    .chip{font-size:13px;padding:6px 11px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    .chip:active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+    /* ---------- Options ---------- */
+    .opts{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:14px;color:var(--muted)}
+    .opts label{display:flex;align-items:center;gap:6px}
+    .opts input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+
+    /* ---------- Result ---------- */
+    .result{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);margin-bottom:18px;min-height:60px}
+    .total{font-size:42px;font-weight:700;line-height:1}
+    .total small{font-size:15px;font-weight:500;color:var(--muted);margin-left:8px}
+    .err{color:var(--accent);font-size:14px}
+    .breakdown{margin-top:10px;font-size:13px;color:var(--muted);line-height:1.6;word-break:break-word}
+    .die{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;margin:1px;border-radius:6px;background:var(--bg);border:1px solid var(--border)}
+    .die.max{background:var(--good);color:#fff;border-color:var(--good)}
+    .die.one{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .die.dropped{opacity:.4;text-decoration:line-through}
+
+    /* ---------- Presets ---------- */
+    h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 4px 8px}
+    .preset{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow)}
+    .preset .info{flex:1;min-width:0}
+    .preset .pname{font-weight:600;font-size:15px}
+    .preset .pexpr{font-size:13px;color:var(--muted);font-family:ui-monospace,monospace}
+    .preset button{border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:9px;padding:7px 10px;font-size:13px}
+    .preset .go{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+    .save{display:flex;gap:8px;margin-top:6px}
+    .save input{flex:1;font-size:15px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    .empty{color:var(--muted);font-size:14px;padding:4px}
+    .hint{font-size:12px;color:var(--muted);margin:4px 4px 14px;line-height:1.5}
+    .history{font-size:13px;color:var(--muted);line-height:1.7}
+    .history span{font-family:ui-monospace,monospace}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🎲 RPG Dice</h1></div>
+  <main>
+    <!-- Expression entry -->
+    <div class="field">
+      <input id="expr" type="text" inputmode="text" placeholder="e.g. 12d8+4d6+1d4+6" autocomplete="off" />
+      <button class="roll" id="rollBtn">Roll</button>
+    </div>
+
+    <!-- Quick add chips -->
+    <div class="chips" id="chips"></div>
+
+    <!-- Reroll / modifier options -->
+    <div class="opts">
+      <label><input type="checkbox" id="reroll1" /> Reroll any 1's</label>
+      <label><input type="checkbox" id="explode" /> Explode max rolls</label>
+    </div>
+
+    <!-- Result display -->
+    <div class="result" id="result">
+      <div class="total" style="color:var(--muted)">—</div>
+      <div class="breakdown">Enter an expression and tap Roll.</div>
+    </div>
+
+    <p class="hint">
+      Supports <b>NdX</b> dice with <b>+ / -</b> modifiers, e.g.
+      <code>3d6</code>, <code>12d8+4d6+1d4+6</code>, <code>2d20-1</code>.
+      Toggle “Reroll any 1's” to reroll every die that lands on 1 (once).
+    </p>
+
+    <!-- Saved presets -->
+    <h2>Saved combinations</h2>
+    <div id="presets"></div>
+    <div class="save">
+      <input id="presetName" type="text" placeholder="Name (e.g. Fireball)" autocomplete="off" />
+      <button class="roll" id="saveBtn" style="font-size:15px">Save current</button>
+    </div>
+
+    <!-- Recent rolls -->
+    <h2>Recent rolls</h2>
+    <div class="history" id="history"><div class="empty">No rolls yet.</div></div>
+  </main>
+
+  <script>
+  /* ============================================================
+   * RPG Dice Roller
+   * - Parses expressions like "12d8+4d6+1d4+6" into terms.
+   * - Each term is either a dice group (NdX) or a flat modifier.
+   * - Optional: reroll any 1's (once), explode on max (recursive).
+   * - Presets and history persist in localStorage.
+   * ============================================================ */
+
+  const LS_PRESETS = "rpgdice.presets";
+  const LS_HISTORY = "rpgdice.history";
+
+  const $ = (id) => document.getElementById(id);
+  const exprEl = $("expr");
+
+  /* ---------- Parsing ----------
+   * Returns { terms:[{type:'dice',count,sides,sign}|{type:'mod',value,sign}], error }
+   */
+  function parseExpr(raw){
+    const s = (raw || "").replace(/\s+/g, "").toLowerCase();
+    if (!s) return { error: "Empty expression." };
+    // Split on + / - while keeping the sign with each chunk.
+    const tokens = s.match(/[+-]?[^+-]+/g);
+    if (!tokens) return { error: "Could not read that expression." };
+    const terms = [];
+    for (const tok of tokens){
+      const sign = tok[0] === "-" ? -1 : 1;
+      const body = tok.replace(/^[+-]/, "");
+      const dice = body.match(/^(\d*)d(\d+)$/); // NdX (N optional, defaults to 1)
+      if (dice){
+        const count = dice[1] === "" ? 1 : parseInt(dice[1], 10);
+        const sides = parseInt(dice[2], 10);
+        if (count < 1 || count > 999) return { error: "Dice count must be 1–999." };
+        if (sides < 2 || sides > 1000) return { error: "Die sides must be 2–1000." };
+        terms.push({ type: "dice", count, sides, sign });
+      } else if (/^\d+$/.test(body)){
+        terms.push({ type: "mod", value: parseInt(body, 10), sign });
+      } else {
+        return { error: "Bad term: “" + tok + "”" };
+      }
+    }
+    return { terms };
+  }
+
+  /* ---------- Rolling ---------- */
+  function rollDie(sides){ return 1 + Math.floor(Math.random() * sides); }
+
+  function rollExpr(raw, opts){
+    const parsed = parseExpr(raw);
+    if (parsed.error) return parsed;
+    let total = 0;
+    const parts = []; // human-readable breakdown pieces
+
+    for (const t of parsed.terms){
+      const sgn = t.sign < 0 ? "−" : "+";
+      if (t.type === "mod"){
+        total += t.sign * t.value;
+        parts.push({ label: sgn + " " + t.value, kind: "mod" });
+        continue;
+      }
+      // Dice group
+      const rolls = [];
+      for (let i = 0; i < t.count; i++){
+        let v = rollDie(t.sides);
+        // Reroll 1's once.
+        if (opts.reroll1 && v === 1) v = rollDie(t.sides);
+        rolls.push({ v, max: v === t.sides, one: v === 1 });
+        // Explode: extra die on max (cap to avoid runaway loops).
+        if (opts.explode){
+          let guard = 0;
+          while (v === t.sides && guard < 50){
+            v = rollDie(t.sides);
+            rolls.push({ v, max: v === t.sides, one: v === 1, extra: true });
+            guard++;
+          }
+        }
+      }
+      const sub = rolls.reduce((a, r) => a + r.v, 0);
+      total += t.sign * sub;
+      parts.push({ label: sgn + " " + t.count + "d" + t.sides, kind: "dice", rolls, sub });
+    }
+    return { total, parts };
+  }
+
+  /* ---------- Rendering result ---------- */
+  function renderResult(raw){
+    const opts = { reroll1: $("reroll1").checked, explode: $("explode").checked };
+    const res = rollExpr(raw, opts);
+    const box = $("result");
+    if (res.error){
+      box.innerHTML = '<div class="total" style="color:var(--accent)">!</div><div class="err">' + res.error + '</div>';
+      return;
+    }
+    let html = '<div class="total">' + res.total + ' <small>' + escapeHtml(raw) + '</small></div>';
+    html += '<div class="breakdown">';
+    for (const p of res.parts){
+      if (p.kind === "mod"){
+        html += '<span style="margin-right:8px">' + p.label + '</span>';
+      } else {
+        html += '<div style="margin-top:6px"><b>' + p.label + '</b> = ' + p.sub + ' &nbsp;';
+        for (const r of p.rolls){
+          const cls = r.one ? "die one" : (r.max ? "die max" : "die");
+          html += '<span class="' + cls + '"' + (r.extra ? ' title="exploded"' : '') + '>' + r.v + '</span>';
+        }
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+    box.innerHTML = html;
+
+    if (navigator.vibrate) navigator.vibrate(20);
+    addHistory(raw, res.total, opts);
+  }
+
+  function escapeHtml(s){ return (s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  /* ---------- Quick chips ---------- */
+  const QUICK = ["d4","d6","d8","d10","d12","d20","d100","+1","+2"];
+  function buildChips(){
+    const wrap = $("chips");
+    QUICK.forEach(q => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = q;
+      b.onclick = () => appendTerm(q);
+      wrap.appendChild(b);
+    });
+  }
+  // Append a die or modifier to the current expression intelligently.
+  function appendTerm(q){
+    let cur = exprEl.value.trim();
+    if (q.startsWith("d")){
+      // Stack onto an existing matching die: "d6" + 3d6 -> 4d6
+      const re = new RegExp("(\\d+)" + q + "(?![0-9])");
+      const m = cur.match(re);
+      if (m){
+        cur = cur.replace(re, (parseInt(m[1],10)+1) + q);
+      } else {
+        cur += (cur && !/[+-]\s*$/.test(cur) ? "+" : "") + "1" + q;
+      }
+    } else { // a +N modifier
+      cur += q;
+    }
+    exprEl.value = cur;
+  }
+
+  /* ---------- Presets ---------- */
+  function loadPresets(){ try { return JSON.parse(localStorage.getItem(LS_PRESETS)) || []; } catch { return []; } }
+  function savePresets(p){ localStorage.setItem(LS_PRESETS, JSON.stringify(p)); }
+
+  function renderPresets(){
+    const list = loadPresets();
+    const box = $("presets");
+    box.innerHTML = "";
+    if (!list.length){ box.innerHTML = '<div class="empty">No saved combinations yet. Build an expression and tap “Save current”.</div>'; return; }
+    list.forEach((p, i) => {
+      const row = document.createElement("div");
+      row.className = "preset";
+      row.innerHTML =
+        '<div class="info"><div class="pname"></div><div class="pexpr"></div></div>' +
+        '<button class="load">Load</button><button class="go">Roll</button><button class="del">✕</button>';
+      row.querySelector(".pname").textContent = p.name;
+      row.querySelector(".pexpr").textContent = p.expr;
+      row.querySelector(".load").onclick = () => { exprEl.value = p.expr; exprEl.focus(); };
+      row.querySelector(".go").onclick = () => { exprEl.value = p.expr; renderResult(p.expr); };
+      row.querySelector(".del").onclick = () => { const a = loadPresets(); a.splice(i,1); savePresets(a); renderPresets(); };
+      box.appendChild(row);
+    });
+  }
+
+  function saveCurrent(){
+    const expr = exprEl.value.trim();
+    if (!expr){ alert("Enter a dice expression first."); return; }
+    const check = parseExpr(expr);
+    if (check.error){ alert(check.error); return; }
+    const name = ($("presetName").value.trim()) || expr;
+    const list = loadPresets();
+    list.push({ name, expr });
+    savePresets(list);
+    $("presetName").value = "";
+    renderPresets();
+  }
+
+  /* ---------- History ---------- */
+  function loadHistory(){ try { return JSON.parse(localStorage.getItem(LS_HISTORY)) || []; } catch { return []; } }
+  function addHistory(expr, total, opts){
+    const list = loadHistory();
+    const flags = [opts.reroll1 ? "rr1" : "", opts.explode ? "exp" : ""].filter(Boolean).join(",");
+    list.unshift({ expr, total, flags, t: Date.now() });
+    localStorage.setItem(LS_HISTORY, JSON.stringify(list.slice(0, 20)));
+    renderHistory();
+  }
+  function renderHistory(){
+    const list = loadHistory();
+    const box = $("history");
+    if (!list.length){ box.innerHTML = '<div class="empty">No rolls yet.</div>'; return; }
+    box.innerHTML = list.map(h =>
+      '<div><b>' + h.total + '</b> &nbsp;<span>' + escapeHtml(h.expr) + '</span>' +
+      (h.flags ? ' <span style="opacity:.7">(' + h.flags + ')</span>' : '') + '</div>'
+    ).join("");
+  }
+
+  /* ---------- Wire up ---------- */
+  $("rollBtn").onclick = () => renderResult(exprEl.value.trim());
+  exprEl.addEventListener("keydown", e => { if (e.key === "Enter") renderResult(exprEl.value.trim()); });
+  $("saveBtn").onclick = saveCurrent;
+
+  buildChips();
+  renderPresets();
+  renderHistory();
+  // Seed a friendly default so first-timers see the format.
+  if (!exprEl.value) exprEl.value = "3d6";
+  </script>
+</body>
+</html>

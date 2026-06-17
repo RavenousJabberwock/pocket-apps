@@ -60,6 +60,11 @@ category-grouped grid linking to every app. The site root (`/`) redirects here.
 | 🔢 Tally | `tally.html` | Multiple named counters |
 | 🎲 Dice & Coin | `dice.html` | Roll 1–5 dice, flip a coin |
 
+### Tabletop
+| App | File | What it does |
+| --- | --- | --- |
+| 🐉 RPG Dice | `rpg-dice.html` | Parse expressions like `12d8+4d6+1d4+6`, reroll 1's, explode max rolls, save named combinations |
+
 ### Games
 | App | File | What it does |
 | --- | --- | --- |
