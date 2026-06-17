@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Journal</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#9333ea;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#c084fc;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    .bar button{font-size:13px;padding:7px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff}
+    main{max-width:600px;margin:0 auto;padding:14px}
+    .editor{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:18px}
+    .editor textarea{width:100%;min-height:120px;border:0;background:none;color:var(--fg);font-size:16px;line-height:1.6;resize:vertical}
+    .editor textarea:focus{outline:none}
+    .entry{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+    .entry .date{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px;display:flex;justify-content:space-between}
+    .entry .date button{border:0;background:none;color:var(--muted);font-size:16px}
+    .entry p{margin:0;white-space:pre-wrap;line-height:1.5}
+    .empty{color:var(--muted);text-align:center;padding:30px 0}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>📓 Journal</h1><button id="saveBtn">Save entry</button></div>
+  <main>
+    <div class="editor"><textarea id="text" placeholder="What happened today?"></textarea></div>
+    <div id="entries"></div>
+  </main>
+
+  <script>
+    const KEY = "miniapps.journal";
+    let entries = JSON.parse(localStorage.getItem(KEY) || "[]"); // [{id,date,text}]
+    const esc = s => s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    const save = () => localStorage.setItem(KEY, JSON.stringify(entries));
+
+    function fmt(ts){
+      return new Date(ts).toLocaleString(undefined,{weekday:"short",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+    }
+    function render() {
+      const box = document.getElementById("entries");
+      box.innerHTML = entries.length ? "" : '<p class="empty">No entries yet. Write your first one above.</p>';
+      for (const e of entries) {
+        const div = document.createElement("div");
+        div.className = "entry";
+        div.innerHTML = `<div class="date">${fmt(e.id)}<button title="Delete">🗑</button></div><p>${esc(e.text)}</p>`;
+        div.querySelector("button").onclick = () => {
+          if (confirm("Delete this entry?")) { entries = entries.filter(x => x.id !== e.id); save(); render(); }
+        };
+        box.appendChild(div);
+      }
+    }
+
+    document.getElementById("saveBtn").onclick = () => {
+      const ta = document.getElementById("text");
+      if (!ta.value.trim()) return;
+      entries.unshift({ id: Date.now(), text: ta.value.trim() });
+      ta.value = ""; save(); render();
+    };
+
+    render();
+  </script>
+</body>
+</html>

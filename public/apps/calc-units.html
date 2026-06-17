@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Units Calculator</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#2563eb;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#60a5fa;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:520px;margin:0 auto;padding:14px}
+    .cats{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px}
+    .cats button{white-space:nowrap;padding:9px 13px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:14px}
+    .cats button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .conv{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+    .crow{display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:10px}
+    .crow input,.crow select{padding:12px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .swap{display:block;margin:0 auto 10px;border:1px solid var(--border);background:none;color:var(--accent);border-radius:10px;padding:8px 14px}
+    h3{margin:22px 4px 8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+    .date-tool{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+    .date-tool label{font-size:13px;color:var(--muted);display:block;margin:8px 0 4px}
+    .date-tool input{width:100%;padding:11px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .out{margin-top:12px;font-size:16px;font-weight:600;color:var(--accent)}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>📐 Units</h1></div>
+  <main>
+    <div class="cats" id="cats"></div>
+
+    <div class="conv">
+      <div class="crow"><input id="inVal" type="number" value="1"><select id="inUnit"></select></div>
+      <button class="swap" id="swap">⇅ Swap</button>
+      <div class="crow"><input id="outVal" type="number" readonly><select id="outUnit"></select></div>
+    </div>
+
+    <h3>Date difference</h3>
+    <div class="date-tool">
+      <label>From</label><input id="d1" type="date">
+      <label>To</label><input id="d2" type="date">
+      <div class="out" id="dateOut">—</div>
+    </div>
+
+    <h3>Add / subtract days</h3>
+    <div class="date-tool">
+      <label>Start date</label><input id="d3" type="date">
+      <label>Days (use negative to go back)</label><input id="days" type="number" value="30">
+      <div class="out" id="addOut">—</div>
+    </div>
+  </main>
+
+  <script>
+    /* Conversion factors are expressed relative to a base unit per category.
+       value_in_base = value * factor;  result = value_in_base / targetFactor. */
+    const CATS = {
+      Length: { base:"m", units:{ "mm":0.001,"cm":0.01,"m":1,"km":1000,"in":0.0254,"ft":0.3048,"yd":0.9144,"mi":1609.344 } },
+      Weight: { base:"kg", units:{ "mg":1e-6,"g":0.001,"kg":1,"t":1000,"oz":0.0283495,"lb":0.453592,"st":6.35029 } },
+      Volume: { base:"L", units:{ "mL":0.001,"L":1,"tsp":0.00492892,"tbsp":0.0147868,"cup":0.236588,"pt":0.473176,"qt":0.946353,"gal":3.78541 } },
+      Area:   { base:"m²", units:{ "cm²":0.0001,"m²":1,"ha":10000,"km²":1e6,"in²":0.00064516,"ft²":0.092903,"ac":4046.86 } },
+      Speed:  { base:"m/s", units:{ "m/s":1,"km/h":0.277778,"mph":0.44704,"knot":0.514444,"ft/s":0.3048 } },
+      Temp:   { special:true, units:{ "°C":1,"°F":1,"K":1 } },
+      Time:   { base:"s", units:{ "ms":0.001,"s":1,"min":60,"h":3600,"day":86400,"week":604800,"year":31557600 } },
+      Data:   { base:"B", units:{ "B":1,"KB":1024,"MB":1048576,"GB":1073741824,"TB":1099511627776 } },
+    };
+
+    let cat = "Length";
+    const cats = document.getElementById("cats");
+    Object.keys(CATS).forEach(name => {
+      const b = document.createElement("button"); b.textContent = name;
+      if (name === cat) b.classList.add("active");
+      b.onclick = () => { cat = name; document.querySelectorAll(".cats button").forEach(x=>x.classList.remove("active")); b.classList.add("active"); fillUnits(); };
+      cats.appendChild(b);
+    });
+
+    const inUnit = document.getElementById("inUnit"), outUnit = document.getElementById("outUnit");
+    function fillUnits(){
+      const units = Object.keys(CATS[cat].units);
+      inUnit.innerHTML = outUnit.innerHTML = units.map(u => `<option>${u}</option>`).join("");
+      inUnit.value = units[0]; outUnit.value = units[1] || units[0];
+      convert();
+    }
+    function tempTo(v, from, to){
+      // Normalize to Celsius first.
+      let c = from === "°C" ? v : from === "°F" ? (v-32)*5/9 : v - 273.15;
+      return to === "°C" ? c : to === "°F" ? c*9/5+32 : c + 273.15;
+    }
+    function convert(){
+      const v = parseFloat(document.getElementById("inVal").value);
+      if (isNaN(v)){ document.getElementById("outVal").value = ""; return; }
+      let r;
+      if (CATS[cat].special){ r = tempTo(v, inUnit.value, outUnit.value); }
+      else { const u = CATS[cat].units; r = v * u[inUnit.value] / u[outUnit.value]; }
+      document.getElementById("outVal").value = Math.round(r * 1e8) / 1e8;
+    }
+    ["inVal","inUnit","outUnit"].forEach(id => document.getElementById(id).addEventListener("input", convert));
+    document.getElementById("swap").onclick = () => { const t = inUnit.value; inUnit.value = outUnit.value; outUnit.value = t; convert(); };
+
+    /* ---- Date difference ---- */
+    function diff(){
+      const a = document.getElementById("d1").value, b = document.getElementById("d2").value;
+      if (!a || !b){ return; }
+      const ms = new Date(b) - new Date(a);
+      const days = Math.round(ms / 86400000);
+      document.getElementById("dateOut").textContent = days + " days (" + (days/7).toFixed(1) + " weeks)";
+    }
+    document.getElementById("d1").onchange = diff; document.getElementById("d2").onchange = diff;
+
+    /* ---- Add days ---- */
+    function addDays(){
+      const s = document.getElementById("d3").value; if (!s) return;
+      const n = parseInt(document.getElementById("days").value || "0", 10);
+      const d = new Date(s); d.setDate(d.getDate() + n);
+      document.getElementById("addOut").textContent = d.toDateString();
+    }
+    document.getElementById("d3").onchange = addDays; document.getElementById("days").oninput = addDays;
+
+    fillUnits();
+  </script>
+</body>
+</html>

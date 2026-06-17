@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Mini Browser</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#0ea5e9;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#38bdf8;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+    body{display:flex;flex-direction:column}
+    .bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px;white-space:nowrap}
+    .bar form{flex:1;display:flex;gap:6px}
+    .bar input{flex:1;padding:9px 12px;font-size:15px;border-radius:999px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .bar button{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:9px 14px}
+    .frame{flex:1;position:relative}
+    iframe{width:100%;height:100%;border:0;background:#fff}
+    .fallback{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;background:var(--bg)}
+    .fallback.show{display:flex}
+    .fallback p{color:var(--muted);max-width:300px}
+    .fallback a{display:inline-block;margin-top:14px;padding:12px 18px;border-radius:12px;background:var(--accent);color:#fff;text-decoration:none}
+    .bookmarks{display:flex;gap:8px;flex-wrap:wrap;padding:10px}
+    .bookmarks button{padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="index.html">←</a>
+    <form id="form">
+      <input id="url" type="text" placeholder="Search or enter address" autocomplete="off">
+      <button type="submit">Go</button>
+    </form>
+  </div>
+  <div class="bookmarks" id="bookmarks"></div>
+  <div class="frame">
+    <iframe id="frame" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <div class="fallback" id="fallback">
+      <p>This site can't be shown inside the mini browser — many sites block embedding for security. Open it in a full browser tab instead.</p>
+      <a id="openTab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+    </div>
+  </div>
+
+  <script>
+    // A real browser engine can't be built in static HTML. This is a lightweight
+    // viewer: it tries to load pages in an <iframe>, and offers a "new tab"
+    // fallback for the many sites that refuse to be embedded.
+    const frame = document.getElementById("frame");
+    const fallback = document.getElementById("fallback");
+    const openTab = document.getElementById("openTab");
+    const input = document.getElementById("url");
+
+    function normalize(raw){
+      raw = raw.trim();
+      if (!raw) return "";
+      // If it looks like a domain, prefix https; otherwise treat as a search.
+      if (/^https?:\/\//i.test(raw)) return raw;
+      if (/^[\w-]+(\.[\w-]+)+/.test(raw)) return "https://" + raw;
+      return "https://duckduckgo.com/?q=" + encodeURIComponent(raw);
+    }
+    function navigate(raw){
+      const url = normalize(raw); if (!url) return;
+      input.value = url; openTab.href = url;
+      fallback.classList.remove("show");
+      frame.src = url;
+      // If the iframe is blocked, it usually never fires load; show fallback after a delay.
+      clearTimeout(window._t); window._t = setTimeout(() => fallback.classList.add("show"), 2500);
+    }
+    frame.addEventListener("load", () => { clearTimeout(window._t); });
+
+    document.getElementById("form").onsubmit = (e) => { e.preventDefault(); navigate(input.value); };
+
+    // Quick bookmarks (embed-friendly examples).
+    const marks = [
+      ["DuckDuckGo","https://duckduckgo.com"],
+      ["Wikipedia","https://wikipedia.org"],
+      ["Example","https://example.com"],
+    ];
+    const bm = document.getElementById("bookmarks");
+    marks.forEach(([name, url]) => { const b = document.createElement("button"); b.textContent = name; b.onclick = () => navigate(url); bm.appendChild(b); });
+  </script>
+</body>
+</html>

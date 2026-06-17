@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Dice & Coin</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#7c3aed;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#a78bfa;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;text-align:center}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border);text-align:left}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:420px;margin:0 auto;padding:18px 16px}
+    .tabs{display:flex;gap:8px;margin-bottom:20px}
+    .tabs button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    .tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .panel{display:none}.panel.active{display:block}
+    .dice{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px;min-height:80px}
+    .die{width:72px;height:72px;border-radius:14px;background:var(--card);border:2px solid var(--border);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:9px;gap:3px}
+    .pip{border-radius:50%;background:var(--accent);align-self:center;justify-self:center;width:12px;height:12px;visibility:hidden}
+    .total{font-size:18px;color:var(--muted);margin-bottom:14px}
+    .coin{font-size:90px;margin:14px 0}
+    select,button.roll{font-size:16px;padding:12px 18px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    button.roll{background:var(--accent);color:#fff;border-color:var(--accent);min-width:140px;margin-top:10px}
+    .controls{display:flex;gap:10px;justify-content:center;align-items:center}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🎲 Dice & Coin</h1></div>
+  <main>
+    <div class="tabs"><button class="active" data-tab="diceP">Dice</button><button data-tab="coinP">Coin</button></div>
+
+    <div class="panel active" id="diceP">
+      <div class="dice" id="dice"></div>
+      <div class="total" id="total"></div>
+      <div class="controls">
+        <select id="count"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+        <span>dice</span>
+      </div>
+      <button class="roll" id="rollDice">🎲 Roll</button>
+    </div>
+
+    <div class="panel" id="coinP">
+      <div class="coin" id="coin">🪙</div>
+      <div class="total" id="coinResult">Tap to flip</div>
+      <button class="roll" id="flip">Flip coin</button>
+    </div>
+  </main>
+
+  <script>
+    // Pip layout per face (positions 0-8 on a 3x3 grid).
+    const FACES = { 1:[4], 2:[0,8], 3:[0,4,8], 4:[0,2,6,8], 5:[0,2,4,6,8], 6:[0,2,3,5,6,8] };
+
+    document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+      document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+      b.classList.add("active"); document.getElementById(b.dataset.tab).classList.add("active");
+    });
+
+    function rollDice(){
+      const n = +document.getElementById("count").value;
+      const box = document.getElementById("dice"); box.innerHTML = "";
+      let sum = 0;
+      for (let i = 0; i < n; i++){
+        const v = 1 + Math.floor(Math.random()*6); sum += v;
+        const die = document.createElement("div"); die.className = "die";
+        for (let p = 0; p < 9; p++){ const pip = document.createElement("div"); pip.className = "pip"; if (FACES[v].includes(p)) pip.style.visibility = "visible"; die.appendChild(pip); }
+        box.appendChild(die);
+      }
+      document.getElementById("total").textContent = n > 1 ? "Total: " + sum : "";
+      navigator.vibrate && navigator.vibrate(20);
+    }
+    function flip(){
+      const heads = Math.random() < 0.5;
+      document.getElementById("coin").textContent = heads ? "👑" : "🪙";
+      document.getElementById("coinResult").textContent = heads ? "Heads" : "Tails";
+      navigator.vibrate && navigator.vibrate(20);
+    }
+    document.getElementById("rollDice").onclick = rollDice;
+    document.getElementById("flip").onclick = flip;
+    rollDice();
+  </script>
+</body>
+</html>

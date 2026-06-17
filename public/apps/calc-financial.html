@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Financial Calculator</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#d97706;--muted:#64748b;--key:#fff}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#f59e0b;--muted:#94a3b8;--key:#1e293b}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:480px;margin:0 auto;padding:14px}
+    .tabs{display:flex;gap:8px;margin-bottom:14px}
+    .tabs button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:14px}
+    .tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .panel{display:none}.panel.active{display:block}
+    .field{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .field label{width:70px;font-weight:600;color:var(--accent)}
+    .field input{flex:1;padding:11px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    .field button{padding:11px 12px;border-radius:10px;border:1px solid var(--accent);background:none;color:var(--accent);font-size:13px;white-space:nowrap}
+    .hint{font-size:12px;color:var(--muted);margin:4px 0 16px}
+    .result{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:15px;min-height:20px}
+    /* RPN */
+    .stack{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;font-family:ui-monospace,monospace;text-align:right}
+    .stack div{padding:4px 8px;font-size:18px}
+    .stack .x{font-size:26px;font-weight:700}
+    .rpnkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .rpnkeys button{padding:16px 0;font-size:18px;border-radius:11px;border:1px solid var(--border);background:var(--key);color:var(--fg)}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>💰 Financial</h1></div>
+  <main>
+    <div class="tabs">
+      <button class="active" data-tab="tvm">TVM (loan/savings)</button>
+      <button data-tab="rpn">RPN (HP-12C)</button>
+    </div>
+
+    <!-- Time Value of Money: fill 4 fields, blank the one to solve, tap Solve. -->
+    <div class="panel active" id="tvm">
+      <div class="field"><label>N</label><input id="N" type="number" placeholder="periods"><button data-solve="N">Solve</button></div>
+      <div class="field"><label>I/Y %</label><input id="I" type="number" placeholder="rate / period"><button data-solve="I">Solve</button></div>
+      <div class="field"><label>PV</label><input id="PV" type="number" placeholder="present value"><button data-solve="PV">Solve</button></div>
+      <div class="field"><label>PMT</label><input id="PMT" type="number" placeholder="payment"><button data-solve="PMT">Solve</button></div>
+      <div class="field"><label>FV</label><input id="FV" type="number" placeholder="future value"><button data-solve="FV">Solve</button></div>
+      <p class="hint">Use sign convention: money you pay out is negative, money you receive is positive. I/Y is the rate per period. Leave the unknown field blank (or tap its Solve).</p>
+      <div class="result" id="tvmResult">Enter values and tap Solve on the unknown.</div>
+    </div>
+
+    <!-- Reverse Polish Notation calculator, HP-12C style. -->
+    <div class="panel" id="rpn">
+      <div class="stack" id="stackView"></div>
+      <div class="rpnkeys" id="rpnKeys"></div>
+    </div>
+  </main>
+
+  <script>
+    /* ---------------- Tabs ---------------- */
+    document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+      document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+      b.classList.add("active"); document.getElementById(b.dataset.tab).classList.add("active");
+    });
+
+    /* ---------------- TVM solver ----------------
+       Equation: PV + PMT*(1-(1+i)^-N)/i + FV*(1+i)^-N = 0  (end-of-period). */
+    function getNum(id){ const v = document.getElementById(id).value; return v === "" ? null : parseFloat(v); }
+    function setNum(id, v){ document.getElementById(id).value = Math.round(v * 1e6) / 1e6; }
+
+    function tvm(solveFor){
+      let N = getNum("N"), I = getNum("I"), PV = getNum("PV"), PMT = getNum("PMT"), FV = getNum("FV");
+      const i = I !== null ? I / 100 : null;
+      const out = document.getElementById("tvmResult");
+      try {
+        if (solveFor === "FV"){ const f = Math.pow(1+i,N); setNum("FV", -(PV*f + PMT*(f-1)/i)); }
+        else if (solveFor === "PV"){ const f = Math.pow(1+i,N); setNum("PV", -(FV + PMT*(f-1)/i)/f); }
+        else if (solveFor === "PMT"){ const f = Math.pow(1+i,N); setNum("PMT", -(PV*f + FV)*i/(f-1)); }
+        else if (solveFor === "N"){ // solve for number of periods
+          const r = 1+i; const num = (PMT - FV*i); const den = (PMT + PV*i);
+          setNum("N", Math.log(num/den)/Math.log(r));
+        }
+        else if (solveFor === "I"){ // bisection for interest rate
+          const f = rate => { const x = rate/100; const p = Math.pow(1+x,N); return PV*p + PMT*(p-1)/x + FV; };
+          let lo = -0.999, hi = 1000, mid;
+          for (let k=0;k<200;k++){ mid=(lo+hi)/2; const fm = f(mid); if (Math.abs(fm) < 1e-7) break; if (f(lo)*fm < 0) hi = mid; else lo = mid; }
+          setNum("I", mid);
+        }
+        out.textContent = "Solved " + solveFor + " = " + document.getElementById(solveFor).value;
+      } catch { out.textContent = "Could not solve — check inputs."; }
+    }
+    document.querySelectorAll("[data-solve]").forEach(b => b.onclick = () => tvm(b.dataset.solve));
+
+    /* ---------------- RPN calculator ---------------- */
+    let stack = [0], entry = "", entering = false;
+    const stackView = document.getElementById("stackView");
+    function drawStack(){
+      stackView.innerHTML = "";
+      const labels = ["T","Z","Y","X"];
+      const view = stack.slice(-4); while (view.length < 4) view.unshift(0);
+      view.forEach((v,idx) => {
+        const d = document.createElement("div");
+        if (idx === 3) d.className = "x";
+        const shown = (idx === 3 && entering) ? entry : (Math.round(v*1e6)/1e6);
+        d.textContent = labels[idx] + ":  " + shown;
+        stackView.appendChild(d);
+      });
+    }
+    function pushX(v){ stack.push(v); }
+    function commitEntry(){ if (entering){ stack[stack.length-1] = parseFloat(entry || "0"); entering = false; entry = ""; } }
+
+    const rkeys = ["7","8","9","÷","4","5","6","×","1","2","3","−","0",".","ENTER","+","C","±","%","CHS"];
+    const rpnKeys = document.getElementById("rpnKeys");
+    rkeys.forEach(k => { const b = document.createElement("button"); b.textContent = k; b.onclick = () => rpress(k); rpnKeys.appendChild(b); });
+
+    function rpress(k){
+      if (/[0-9.]/.test(k)){
+        if (!entering){ entering = true; entry = ""; stack.push(0); }
+        if (k === "." && entry.includes(".")) {} else entry += k;
+      }
+      else if (k === "ENTER"){ commitEntry(); stack.push(stack[stack.length-1]); }
+      else if (k === "C"){ stack = [0]; entry = ""; entering = false; }
+      else if (k === "CHS" || k === "±"){ if (entering) entry = entry.startsWith("-") ? entry.slice(1) : "-"+entry; else stack[stack.length-1] *= -1; }
+      else if ("+−×÷".includes(k)){
+        commitEntry(); const b = stack.pop(), a = stack.pop();
+        stack.push(k==="+"?a+b:k==="−"?a-b:k==="×"?a*b:a/b);
+      }
+      else if (k === "%"){ commitEntry(); const b = stack.pop(), a = stack[stack.length-1]; stack.push(a * b/100); }
+      drawStack();
+    }
+    drawStack();
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Simple Calculator</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#6366f1;--muted:#64748b;--key:#fff;--op:#eef2ff}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#818cf8;--muted:#94a3b8;--key:#1e293b;--op:#312e63}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;display:flex;flex-direction:column}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:420px;width:100%;margin:0 auto;padding:14px;flex:1;display:flex;flex-direction:column}
+    .disp{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;text-align:right;margin-bottom:12px}
+    .expr{color:var(--muted);font-size:14px;min-height:18px;word-break:break-all}
+    .val{font-size:40px;font-weight:600;word-break:break-all}
+    .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1}
+    button{font-size:24px;border-radius:14px;border:1px solid var(--border);background:var(--key);color:var(--fg);padding:18px 0}
+    button:active{transform:scale(.96)}
+    .op{background:var(--op);color:var(--accent);font-weight:600}
+    .eq{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .span2{grid-column:span 2}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>➗ Calculator</h1></div>
+  <main>
+    <div class="disp"><div class="expr" id="expr"></div><div class="val" id="val">0</div></div>
+    <div class="keys" id="keys"></div>
+  </main>
+
+  <script>
+    // State: current entry, the stored value, and the pending operator.
+    let entry = "0", stored = null, op = null, justEvaluated = false;
+    const valEl = document.getElementById("val"), exprEl = document.getElementById("expr");
+
+    function update(){ valEl.textContent = entry; exprEl.textContent = (stored!==null? trim(stored)+" "+op : ""); }
+    function trim(n){ return parseFloat(n.toPrecision(12)).toString(); }
+
+    function inputDigit(d){
+      if (justEvaluated){ entry = "0"; justEvaluated = false; }
+      entry = entry === "0" && d !== "." ? d : (d === "." && entry.includes(".") ? entry : entry + d);
+      update();
+    }
+    function setOp(nextOp){
+      if (op && !justEvaluated) compute();
+      else stored = parseFloat(entry);
+      op = nextOp; justEvaluated = true; update();
+    }
+    function compute(){
+      if (op === null || stored === null) return;
+      const a = stored, b = parseFloat(entry);
+      let r = a;
+      if (op === "+") r = a + b; else if (op === "−") r = a - b;
+      else if (op === "×") r = a * b; else if (op === "÷") r = b === 0 ? NaN : a / b;
+      entry = isFinite(r) ? trim(r) : "Error"; stored = isFinite(r) ? r : null;
+    }
+    function equals(){ if (op !== null){ compute(); op = null; stored = null; justEvaluated = true; update(); } }
+
+    const layout = [
+      ["AC","±","%","÷"],
+      ["7","8","9","×"],
+      ["4","5","6","−"],
+      ["1","2","3","+"],
+      ["0",".","="],
+    ];
+    const keys = document.getElementById("keys");
+    layout.flat().forEach(k => {
+      const b = document.createElement("button");
+      b.textContent = k;
+      if ("÷×−+".includes(k)) b.className = "op";
+      if (k === "=") b.className = "eq";
+      if (k === "0") b.className = "span2";
+      b.onclick = () => handle(k);
+      keys.appendChild(b);
+    });
+
+    function handle(k){
+      if (/[0-9.]/.test(k)) return inputDigit(k);
+      if ("÷×−+".includes(k)) return setOp(k);
+      if (k === "=") return equals();
+      if (k === "AC"){ entry = "0"; stored = null; op = null; return update(); }
+      if (k === "±"){ entry = trim(parseFloat(entry) * -1); return update(); }
+      if (k === "%"){ entry = trim(parseFloat(entry) / 100); return update(); }
+    }
+
+    // Physical keyboard support.
+    addEventListener("keydown", e => {
+      const map = {"/":"÷","*":"×","-":"−","+":"+","Enter":"=","=":"=","Escape":"AC","Backspace":"BS"};
+      if (e.key >= "0" && e.key <= "9" || e.key === ".") handle(e.key);
+      else if (e.key === "BS" || e.key === "Backspace"){ entry = entry.length > 1 ? entry.slice(0,-1) : "0"; update(); }
+      else if (map[e.key]) handle(map[e.key]);
+    });
+
+    update();
+  </script>
+</body>
+</html>

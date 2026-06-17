@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Paint</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#6366f1;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#818cf8;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}
+    .bar h1{font-size:16px;margin:0;flex:1}
+    .tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    button,select{font-size:14px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    button:active{transform:scale(.96)}
+    input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-radius:10px;background:none;padding:2px}
+    input[type=range]{width:110px}
+    canvas{display:block;touch-action:none;background:#fff;width:100%;height:100%}
+    .wrap{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column}
+    .canvas-area{flex:1;min-height:0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="bar"><a href="index.html">← Apps</a><h1>🎨 Paint</h1></div>
+    <div class="tools">
+      <input type="color" id="color" value="#6366f1" aria-label="Color" />
+      <input type="range" id="size" min="1" max="40" value="6" aria-label="Brush size" />
+      <button id="erase">Eraser</button>
+      <button id="clear">Clear</button>
+      <button id="save">Save PNG</button>
+    </div>
+    <div class="canvas-area"><canvas id="c"></canvas></div>
+  </div>
+
+  <script>
+    // ---- Setup canvas at device pixel ratio for crisp lines ----
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    let drawing = false, erasing = false, last = null;
+
+    function resize() {
+      // Preserve drawing across resize by copying to a temp canvas.
+      const tmp = document.createElement("canvas");
+      tmp.width = canvas.width; tmp.height = canvas.height;
+      tmp.getContext("2d").drawImage(canvas, 0, 0);
+      const r = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.lineCap = ctx.lineJoin = "round";
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height);
+      ctx.drawImage(tmp, 0, 0, r.width, r.height);
+    }
+    window.addEventListener("resize", resize);
+
+    // ---- Pointer position relative to canvas (CSS pixels) ----
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const p = e.touches ? e.touches[0] : e;
+      return { x: p.clientX - r.left, y: p.clientY - r.top };
+    }
+    function start(e){ drawing = true; last = pos(e); e.preventDefault(); }
+    function move(e){
+      if(!drawing) return;
+      const p = pos(e);
+      ctx.strokeStyle = erasing ? "#fff" : document.getElementById("color").value;
+      ctx.lineWidth = document.getElementById("size").value;
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p; e.preventDefault();
+    }
+    function end(){ drawing = false; }
+
+    canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    canvas.addEventListener("touchstart", start, {passive:false});
+    canvas.addEventListener("touchmove", move, {passive:false});
+    canvas.addEventListener("touchend", end);
+
+    // ---- Toolbar actions ----
+    const eraseBtn = document.getElementById("erase");
+    eraseBtn.onclick = () => { erasing = !erasing; eraseBtn.style.background = erasing ? "var(--accent)" : ""; eraseBtn.style.color = erasing ? "#fff" : ""; };
+    document.getElementById("clear").onclick = () => {
+      const r = canvas.getBoundingClientRect();
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height);
+    };
+    document.getElementById("save").onclick = () => {
+      const a = document.createElement("a");
+      a.download = "drawing.png"; a.href = canvas.toDataURL("image/png"); a.click();
+    };
+
+    resize();
+  </script>
+</body>
+</html>

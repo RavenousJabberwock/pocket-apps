@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Snake</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#bcd97a;--fg:#1a2e05;--card:#a8c968;--border:#7a9a3f;--snake:#1a2e05;--food:#3a5e0a}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#a3e635;--card:#1e293b;--border:#334155;--snake:#a3e635;--food:#f43f5e}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;font-family:ui-monospace,Menlo,monospace;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--fg);text-decoration:none;font-size:15px;font-weight:700}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:420px;margin:0 auto;padding:12px;text-align:center}
+    .score{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
+    canvas{width:100%;aspect-ratio:1;background:var(--card);border:3px solid var(--border);border-radius:8px;touch-action:none}
+    .dpad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(3,64px);gap:8px;justify-content:center;margin:16px auto 0}
+    .dpad button{border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:12px;font-size:22px}
+    .dpad button:active{transform:scale(.94)}
+    .up{grid-column:2;grid-row:1}.left{grid-column:1;grid-row:2}.right{grid-column:3;grid-row:2}.down{grid-column:2;grid-row:3}
+    .center{grid-column:2;grid-row:2;font-size:13px}
+    .msg{margin-top:10px;font-weight:700;min-height:20px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🐍 Snake</h1></div>
+  <main>
+    <div class="score"><span>Score: <b id="score">0</b></span><span>Best: <b id="best">0</b></span></div>
+    <canvas id="c" width="300" height="300"></canvas>
+    <div class="msg" id="msg">Swipe or use the pad to start</div>
+    <div class="dpad">
+      <button class="up" data-dir="up">▲</button>
+      <button class="left" data-dir="left">◀</button>
+      <button class="center" id="startBtn">Start</button>
+      <button class="right" data-dir="right">▶</button>
+      <button class="down" data-dir="down">▼</button>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("c"), ctx = canvas.getContext("2d");
+    const N = 15;                 // grid size (cells per side)
+    const cell = canvas.width / N;
+    let snake, dir, nextDir, food, score, running, loop, speed;
+    let best = +(localStorage.getItem("miniapps.snake.best") || 0);
+    document.getElementById("best").textContent = best;
+
+    function reset(){
+      snake = [{x:7,y:7},{x:6,y:7},{x:5,y:7}];
+      dir = nextDir = {x:1,y:0};
+      score = 0; speed = 160; placeFood(); draw();
+      document.getElementById("score").textContent = 0;
+    }
+    function placeFood(){
+      do { food = { x: Math.floor(Math.random()*N), y: Math.floor(Math.random()*N) }; }
+      while (snake.some(s => s.x === food.x && s.y === food.y));
+    }
+    function draw(){
+      ctx.fillStyle = getCss("--card"); ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = getCss("--food");
+      ctx.fillRect(food.x*cell+2, food.y*cell+2, cell-4, cell-4);
+      ctx.fillStyle = getCss("--snake");
+      snake.forEach(s => ctx.fillRect(s.x*cell+1, s.y*cell+1, cell-2, cell-2));
+    }
+    function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+    function step(){
+      dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+      // Wall or self collision = game over.
+      if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || snake.some(s => s.x === head.x && s.y === head.y)){
+        gameOver(); return;
+      }
+      snake.unshift(head);
+      if (head.x === food.x && head.y === food.y){
+        score++; document.getElementById("score").textContent = score;
+        if (score % 3 === 0 && speed > 70) { speed -= 8; clearInterval(loop); loop = setInterval(step, speed); }
+        placeFood();
+      } else snake.pop();
+      draw();
+    }
+    function start(){
+      if (running) return;
+      reset(); running = true; document.getElementById("msg").textContent = "Go!";
+      loop = setInterval(step, speed);
+    }
+    function gameOver(){
+      clearInterval(loop); running = false;
+      if (score > best){ best = score; localStorage.setItem("miniapps.snake.best", best); document.getElementById("best").textContent = best; }
+      document.getElementById("msg").textContent = "Game over — score " + score + ". Tap Start.";
+    }
+    function setDir(d){
+      const dirs = { up:{x:0,y:-1}, down:{x:0,y:1}, left:{x:-1,y:0}, right:{x:1,y:0} };
+      const nd = dirs[d];
+      // Prevent reversing directly into yourself.
+      if (nd.x === -dir.x && nd.y === -dir.y) return;
+      nextDir = nd;
+      if (!running) start();
+    }
+
+    document.getElementById("startBtn").onclick = start;
+    document.querySelectorAll(".dpad [data-dir]").forEach(b => b.onclick = () => setDir(b.dataset.dir));
+    addEventListener("keydown", e => {
+      const m = { ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right" };
+      if (m[e.key]){ e.preventDefault(); setDir(m[e.key]); }
+    });
+
+    // Swipe controls.
+    let sx, sy;
+    canvas.addEventListener("touchstart", e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, {passive:true});
+    canvas.addEventListener("touchend", e => {
+      const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? "right" : "left");
+      else setDir(dy > 0 ? "down" : "up");
+    }, {passive:true});
+
+    reset();
+  </script>
+</body>
+</html>

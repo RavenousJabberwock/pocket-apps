@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Dialer</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#16a34a;--muted:#64748b;--key:#fff}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#22c55e;--muted:#94a3b8;--key:#1e293b}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;display:flex;flex-direction:column}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:360px;width:100%;margin:0 auto;padding:14px;flex:1;display:flex;flex-direction:column;justify-content:center}
+    .num{font-size:36px;text-align:center;min-height:48px;margin-bottom:18px;letter-spacing:1px;word-break:break-all}
+    .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .pad button{aspect-ratio:1;border-radius:50%;border:1px solid var(--border);background:var(--key);color:var(--fg);font-size:26px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .pad button small{font-size:10px;color:var(--muted);letter-spacing:2px}
+    .pad button:active{transform:scale(.94)}
+    .actions{display:grid;grid-template-columns:1fr 70px 1fr;gap:14px;align-items:center;margin-top:18px}
+    .call{grid-column:2;aspect-ratio:1;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:26px}
+    .back{border:0;background:none;color:var(--muted);font-size:24px}
+    .hint{text-align:center;color:var(--muted);font-size:12px;margin-top:14px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>☎️ Dialer</h1></div>
+  <main>
+    <div class="num" id="num"></div>
+    <div class="pad" id="pad"></div>
+    <div class="actions">
+      <span></span>
+      <button class="call" id="call" title="Call">📞</button>
+      <button class="back" id="back" title="Delete">⌫</button>
+    </div>
+    <p class="hint">Tapping call opens your phone's dialer via a tel: link.</p>
+  </main>
+
+  <script>
+    const keys = [
+      ["1",""],["2","ABC"],["3","DEF"],
+      ["4","GHI"],["5","JKL"],["6","MNO"],
+      ["7","PQRS"],["8","TUV"],["9","WXYZ"],
+      ["*",""],["0","+"],["#",""],
+    ];
+    let value = "";
+    const numEl = document.getElementById("num");
+    const pad = document.getElementById("pad");
+
+    keys.forEach(([d, letters]) => {
+      const b = document.createElement("button");
+      b.innerHTML = `${d}<small>${letters}</small>`;
+      // Long-press 0 inserts + (common dialer behavior).
+      let timer;
+      b.onpointerdown = () => { if (d === "0") timer = setTimeout(() => { value += "+"; numEl.textContent = value; b.dataset.long = "1"; }, 500); };
+      b.onpointerup = () => clearTimeout(timer);
+      b.onclick = () => { if (b.dataset.long){ b.dataset.long = ""; return; } value += d; numEl.textContent = value; };
+      pad.appendChild(b);
+    });
+
+    document.getElementById("back").onclick = () => { value = value.slice(0,-1); numEl.textContent = value; };
+    document.getElementById("call").onclick = () => {
+      if (!value) return;
+      // Trigger the device dialer. On desktop browsers this may do nothing.
+      window.location.href = "tel:" + value;
+    };
+  </script>
+</body>
+</html>

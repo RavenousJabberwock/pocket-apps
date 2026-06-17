@@ -1,0 +1,25 @@
+{
+  "name": "Mini Apps Hub",
+  "short_name": "Mini Apps",
+  "description": "A collection of simple, offline-capable mobile web apps: paint, notes, calculators, timers, trackers, games and more.",
+  "start_url": "/apps/index.html",
+  "scope": "/apps/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icons/app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/app-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

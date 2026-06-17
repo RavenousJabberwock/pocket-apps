@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Shopping List</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#16a34a;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#22c55e;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:560px;margin:0 auto;padding:14px}
+    .add{display:grid;grid-template-columns:1fr 70px auto;gap:8px;margin-bottom:14px}
+    .add input{padding:12px;font-size:16px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--fg);min-width:0}
+    .add button{padding:12px 14px;border-radius:12px;border:0;background:var(--accent);color:#fff;font-size:16px}
+    ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+    li{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px}
+    li.done .t{text-decoration:line-through;color:var(--muted)}
+    .t{flex:1}.q{color:var(--muted);font-size:13px;background:var(--bg);padding:2px 8px;border-radius:8px}
+    li input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent)}
+    .del{border:0;background:none;color:var(--muted);font-size:20px;padding:4px 8px}
+    .foot{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-top:14px}
+    .foot button{border:0;background:none;color:var(--accent);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🛒 Shopping</h1></div>
+  <main>
+    <form class="add" id="form">
+      <input id="text" placeholder="Item…" autocomplete="off" />
+      <input id="qty" placeholder="Qty" autocomplete="off" />
+      <button type="submit">Add</button>
+    </form>
+    <ul id="list"></ul>
+    <div class="foot"><span id="count"></span><button id="clearDone">Clear bought</button></div>
+  </main>
+
+  <script>
+    const KEY = "miniapps.shopping";
+    let items = JSON.parse(localStorage.getItem(KEY) || "[]"); // [{id,text,qty,done}]
+    const list = document.getElementById("list");
+    const save = () => localStorage.setItem(KEY, JSON.stringify(items));
+    const esc = s => s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+    function render() {
+      list.innerHTML = "";
+      for (const it of items) {
+        const li = document.createElement("li");
+        if (it.done) li.className = "done";
+        li.innerHTML = `<input type="checkbox" ${it.done?"checked":""}>
+          <span class="t">${esc(it.text)}</span>
+          ${it.qty?`<span class="q">${esc(it.qty)}</span>`:""}
+          <button class="del">×</button>`;
+        li.querySelector("input").onchange = () => { it.done = !it.done; save(); render(); };
+        li.querySelector(".del").onclick = () => { items = items.filter(x => x.id !== it.id); save(); render(); };
+        list.appendChild(li);
+      }
+      const bought = items.filter(i => i.done).length;
+      document.getElementById("count").textContent = items.length + " items · " + bought + " bought";
+    }
+
+    document.getElementById("form").onsubmit = (e) => {
+      e.preventDefault();
+      const text = document.getElementById("text"), qty = document.getElementById("qty");
+      if (!text.value.trim()) return;
+      items.push({ id: Date.now(), text: text.value.trim(), qty: qty.value.trim(), done: false });
+      text.value = ""; qty.value = ""; save(); render(); text.focus();
+    };
+    document.getElementById("clearDone").onclick = () => { items = items.filter(i => !i.done); save(); render(); };
+
+    render();
+  </script>
+</body>
+</html>

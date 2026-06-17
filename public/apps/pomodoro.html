@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Pomodoro Timer</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#fff1f2;--fg:#0f172a;--card:#fff;--border:#fecdd3;--accent:#e11d48;--muted:#9f1239}
+    @media (prefers-color-scheme:dark){:root{--bg:#1a0c12;--fg:#fce7eb;--card:#2a131c;--border:#4c1d2b;--accent:#fb7185;--muted:#fda4af}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;text-align:center}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border);text-align:left}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:420px;margin:0 auto;padding:20px 16px}
+    .modes{display:flex;gap:8px;margin-bottom:20px}
+    .modes button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:13px}
+    .modes button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .ring{position:relative;width:240px;height:240px;margin:0 auto}
+    svg{transform:rotate(-90deg)}
+    .time{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;font-variant-numeric:tabular-nums}
+    .row{display:flex;gap:10px;justify-content:center;margin:22px 0}
+    .row button{font-size:18px;padding:14px 26px;border-radius:14px;border:1px solid var(--border);background:var(--card);color:var(--fg);min-width:110px}
+    .row button.go{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .count{color:var(--muted);font-size:14px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🍅 Pomodoro</h1></div>
+  <main>
+    <div class="modes">
+      <button class="active" data-min="25" data-name="Focus">Focus 25</button>
+      <button data-min="5" data-name="Short break">Break 5</button>
+      <button data-min="15" data-name="Long break">Long 15</button>
+    </div>
+    <div class="ring">
+      <svg width="240" height="240"><circle cx="120" cy="120" r="110" fill="none" stroke="var(--border)" stroke-width="14"/><circle id="prog" cx="120" cy="120" r="110" fill="none" stroke="var(--accent)" stroke-width="14" stroke-linecap="round" stroke-dasharray="691" stroke-dashoffset="0"/></svg>
+      <div class="time" id="time">25:00</div>
+    </div>
+    <div class="row">
+      <button class="go" id="start">Start</button>
+      <button id="reset">Reset</button>
+    </div>
+    <p class="count">Completed focus sessions: <b id="done">0</b></p>
+  </main>
+
+  <script>
+    const CIRC = 691; // 2*pi*110
+    let total = 25*60, remaining = total, running = false, timer = null, mode = "Focus";
+    let done = +(localStorage.getItem("miniapps.pomo.done") || 0);
+    document.getElementById("done").textContent = done;
+
+    const timeEl = document.getElementById("time"), prog = document.getElementById("prog");
+    function fmt(s){ const m = Math.floor(s/60), ss = s%60; return m + ":" + String(ss).padStart(2,"0"); }
+    function render(){
+      timeEl.textContent = fmt(remaining);
+      prog.style.strokeDashoffset = CIRC * (1 - remaining/total);
+    }
+
+    // Simple beep when a session ends.
+    function beep(){
+      try { const a = new (window.AudioContext||window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain();
+        o.frequency.value = 880; o.connect(g).connect(a.destination); g.gain.setValueAtTime(.4,a.currentTime);
+        o.start(); o.stop(a.currentTime+.6); g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.6); } catch {}
+    }
+
+    function tick(){
+      remaining--;
+      if (remaining <= 0){
+        clearInterval(timer); running = false; beep();
+        document.getElementById("start").textContent = "Start";
+        if (mode === "Focus"){ done++; localStorage.setItem("miniapps.pomo.done", done); document.getElementById("done").textContent = done; }
+        remaining = 0;
+      }
+      render();
+    }
+    document.getElementById("start").onclick = (e) => {
+      if (running){ clearInterval(timer); running = false; e.target.textContent = "Start"; }
+      else { if (remaining <= 0) remaining = total; running = true; e.target.textContent = "Pause"; timer = setInterval(tick, 1000); }
+    };
+    document.getElementById("reset").onclick = () => { clearInterval(timer); running = false; remaining = total; document.getElementById("start").textContent = "Start"; render(); };
+
+    document.querySelectorAll(".modes button").forEach(b => b.onclick = () => {
+      document.querySelectorAll(".modes button").forEach(x => x.classList.remove("active")); b.classList.add("active");
+      clearInterval(timer); running = false; document.getElementById("start").textContent = "Start";
+      mode = b.dataset.name; total = remaining = (+b.dataset.min)*60; render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
