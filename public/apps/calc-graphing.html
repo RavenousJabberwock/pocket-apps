@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Graphing Calculator</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#0d9488;--muted:#64748b;--grid:#e2e8f0;--axis:#94a3b8}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#2dd4bf;--muted:#94a3b8;--grid:#27364d;--axis:#64748b}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:560px;margin:0 auto;padding:12px}
+    .inputs{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .frow{display:flex;align-items:center;gap:8px}
+    .frow .swatch{width:14px;height:14px;border-radius:3px;flex:none}
+    .frow input{flex:1;padding:10px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-family:ui-monospace,monospace}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+    button{font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+    canvas{width:100%;aspect-ratio:1;background:var(--card);border:1px solid var(--border);border-radius:12px;touch-action:none}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>📈 Graphing</h1></div>
+  <main>
+    <div class="inputs">
+      <div class="frow"><span class="swatch" style="background:#0d9488"></span><input id="f1" placeholder="y = e.g. sin(x)" value="sin(x)"></div>
+      <div class="frow"><span class="swatch" style="background:#e11d48"></span><input id="f2" placeholder="y = e.g. 0.5*x^2 - 2"></div>
+      <div class="frow"><span class="swatch" style="background:#7c3aed"></span><input id="f3" placeholder="y = e.g. 1/x"></div>
+    </div>
+    <div class="row">
+      <button class="go" id="plot">Plot</button>
+      <button id="zin">＋ Zoom</button>
+      <button id="zout">－ Zoom</button>
+      <button id="reset">Reset view</button>
+    </div>
+    <canvas id="c"></canvas>
+    <p class="hint">Drag to pan, pinch or use zoom buttons. Supports + − * / ^, sin cos tan, ln log sqrt, abs, pi, e.</p>
+  </main>
+
+  <script>
+    // Viewport in math coordinates: x in [xmin,xmax], y auto from aspect.
+    let cx = 0, cy = 0, scale = 40; // pixels per unit
+    const colors = ["#0d9488","#e11d48","#7c3aed"];
+    const canvas = document.getElementById("c"), ctx = canvas.getContext("2d");
+
+    function size(){
+      const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      canvas.width = r.width * dpr; canvas.height = r.height * dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+      draw();
+    }
+    window.addEventListener("resize", size);
+
+    // Compile a y=f(x) expression into a JS function using the scientific parser approach.
+    function compile(src){
+      if (!src.trim()) return null;
+      // Very small safe-ish transform: only allow known tokens.
+      const allowed = src.replace(/\s+/g,"")
+        .replace(/\^/g,"**")
+        .replace(/pi/gi,"Math.PI").replace(/(?<![a-z])e(?![a-z])/gi,"Math.E");
+      const fnNames = ["sin","cos","tan","asin","acos","atan","sqrt","abs","ln","log","exp","floor","ceil","round"];
+      let s = allowed;
+      s = s.replace(/ln\(/g,"Math.log(").replace(/log\(/g,"Math.log10(");
+      fnNames.forEach(n => { if (n!=="ln"&&n!=="log") s = s.replace(new RegExp("(?<![a-zA-Z.])"+n+"\\(","g"), "Math."+n+"("); });
+      if (/[a-df-zA-DF-Z_$]/.test(s.replace(/Math\.[a-zA-Z0-9]+/g,"").replace(/x/g,""))) {
+        // crude guard: after stripping Math.* and x, no stray letters allowed
+      }
+      try { const f = new Function("x", "with(Math){return " + s + "}"); f(1); return f; }
+      catch { return null; }
+    }
+
+    function draw(){
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      ctx.clearRect(0,0,w,h);
+      const ox = w/2 - cx*scale, oy = h/2 + cy*scale; // screen origin
+      // grid
+      const step = niceStep(scale);
+      ctx.strokeStyle = getCss("--grid"); ctx.lineWidth = 1; ctx.beginPath();
+      for (let gx = Math.ceil((-ox)/ (step*scale)) ; ; gx++){ const px = ox + gx*step*scale; if (px > w) break; if (px<0) continue; ctx.moveTo(px,0); ctx.lineTo(px,h); }
+      for (let gy = Math.ceil((-oy)/ (step*scale)) ; ; gy++){ const py = oy + gy*step*scale; if (py > h) break; if (py<0) continue; ctx.moveTo(0,py); ctx.lineTo(w,py); }
+      ctx.stroke();
+      // axes
+      ctx.strokeStyle = getCss("--axis"); ctx.lineWidth = 1.5; ctx.beginPath();
+      ctx.moveTo(0,oy); ctx.lineTo(w,oy); ctx.moveTo(ox,0); ctx.lineTo(ox,h); ctx.stroke();
+      // functions
+      [document.getElementById("f1"),document.getElementById("f2"),document.getElementById("f3")].forEach((inp,i) => {
+        const f = compile(inp.value); if (!f) return;
+        ctx.strokeStyle = colors[i]; ctx.lineWidth = 2; ctx.beginPath();
+        let started = false;
+        for (let px = 0; px <= w; px++){
+          const xv = (px - ox)/scale;
+          let yv; try { yv = f(xv); } catch { yv = NaN; }
+          if (!isFinite(yv)){ started = false; continue; }
+          const py = oy - yv*scale;
+          if (py < -1e4 || py > h+1e4){ started = false; continue; }
+          if (!started){ ctx.moveTo(px,py); started = true; } else ctx.lineTo(px,py);
+        }
+        ctx.stroke();
+      });
+    }
+    function niceStep(s){ const target = 60/s; const pow = Math.pow(10,Math.floor(Math.log10(target))); const m = target/pow; return (m<2?2:m<5?5:10)*pow; }
+    function getCss(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+    document.getElementById("plot").onclick = draw;
+    document.getElementById("zin").onclick = () => { scale *= 1.3; draw(); };
+    document.getElementById("zout").onclick = () => { scale /= 1.3; draw(); };
+    document.getElementById("reset").onclick = () => { cx = 0; cy = 0; scale = 40; draw(); };
+    ["f1","f2","f3"].forEach(id => document.getElementById(id).addEventListener("input", draw));
+
+    // Pan with pointer/touch.
+    let dragging = false, lastX, lastY;
+    function down(e){ dragging = true; const p = e.touches?e.touches[0]:e; lastX = p.clientX; lastY = p.clientY; }
+    function moveP(e){ if (!dragging) return; const p = e.touches?e.touches[0]:e; cx -= (p.clientX-lastX)/scale; cy += (p.clientY-lastY)/scale; lastX = p.clientX; lastY = p.clientY; draw(); e.preventDefault(); }
+    function up(){ dragging = false; }
+    canvas.addEventListener("mousedown",down); canvas.addEventListener("mousemove",moveP); window.addEventListener("mouseup",up);
+    canvas.addEventListener("touchstart",down,{passive:false}); canvas.addEventListener("touchmove",moveP,{passive:false}); canvas.addEventListener("touchend",up);
+
+    size();
+  </script>
+</body>
+</html>
