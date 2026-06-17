@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Construction Calculator</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--border:#e2e8f0;--accent:#ea580c;--muted:#64748b}
+    @media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#fb923c;--muted:#94a3b8}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:520px;margin:0 auto;padding:14px}
+    h3{margin:18px 4px 8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:6px}
+    .dim{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:end}
+    .dim .f label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+    .dim input{width:100%;padding:10px;font-size:16px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .ops{display:flex;gap:8px;margin:10px 0}
+    .ops button{flex:1;padding:12px;font-size:18px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .ops button.eq{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .out{font-size:22px;font-weight:700;color:var(--accent);margin-top:10px;min-height:26px}
+    .area .row{display:flex;gap:8px;margin-bottom:8px}
+    .area input{flex:1;padding:11px;font-size:16px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+    .area .lbl{width:70px;color:var(--muted);font-size:13px;display:flex;align-items:center}
+    .small{font-size:12px;color:var(--muted);margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🏗️ Construction</h1></div>
+  <main>
+    <h3>Feet-Inch arithmetic</h3>
+    <div class="card">
+      <div class="dim">
+        <div class="f"><label>A · feet</label><input id="aft" type="number" value="5"></div>
+        <div class="f"><label>inches</label><input id="ain" type="number" value="6"></div>
+        <div class="f"><label>frac (e.g. 1/2)</label><input id="afr" placeholder="0"></div>
+      </div>
+      <div class="dim" style="margin-top:8px">
+        <div class="f"><label>B · feet</label><input id="bft" type="number" value="2"></div>
+        <div class="f"><label>inches</label><input id="bin" type="number" value="3"></div>
+        <div class="f"><label>frac</label><input id="bfr" placeholder="1/4"></div>
+      </div>
+      <div class="ops">
+        <button data-op="+">A + B</button>
+        <button data-op="-">A − B</button>
+        <button data-op="*">A × B (area)</button>
+      </div>
+      <div class="out" id="ftOut">—</div>
+      <div class="small">Fractions rounded to nearest 1/16". Multiply returns square feet.</div>
+    </div>
+
+    <h3>Area & Volume (decimal ft)</h3>
+    <div class="card area">
+      <div class="row"><span class="lbl">Length</span><input id="L" type="number" placeholder="ft"></div>
+      <div class="row"><span class="lbl">Width</span><input id="W" type="number" placeholder="ft"></div>
+      <div class="row"><span class="lbl">Height</span><input id="H" type="number" placeholder="ft (optional)"></div>
+      <div class="out" id="avOut">—</div>
+    </div>
+
+    <h3>Concrete / material</h3>
+    <div class="card area">
+      <div class="row"><span class="lbl">Area</span><input id="cArea" type="number" placeholder="ft²"></div>
+      <div class="row"><span class="lbl">Thick</span><input id="cThk" type="number" placeholder="inches"></div>
+      <div class="out" id="cOut">—</div>
+      <div class="small">Estimates cubic yards of concrete needed.</div>
+    </div>
+  </main>
+
+  <script>
+    // Parse a fraction string like "3/4" -> 0.75 (returns 0 if blank/invalid).
+    function frac(s){ if (!s) return 0; if (s.includes("/")){ const [a,b] = s.split("/").map(Number); return b ? a/b : 0; } return parseFloat(s)||0; }
+    // Total inches from feet + inches + fraction.
+    function totalInches(ft, inch, fr){ return (parseFloat(ft)||0)*12 + (parseFloat(inch)||0) + frac(fr); }
+    // Format inches back to feet' inch fraction".
+    function fmt(inches){
+      const sign = inches < 0 ? "-" : ""; inches = Math.abs(inches);
+      const ft = Math.floor(inches/12); let rem = inches - ft*12;
+      const whole = Math.floor(rem); let f16 = Math.round((rem-whole)*16);
+      let w = whole, ftc = ft;
+      if (f16 === 16){ f16 = 0; w++; }
+      if (w === 12){ w = 0; ftc++; }
+      // simplify fraction
+      let num = f16, den = 16; while (num && num % 2 === 0){ num/=2; den/=2; }
+      const fracStr = num ? ` ${num}/${den}"` : "";
+      return `${sign}${ftc}' ${w}${fracStr || '"'}`.replace(/(\d)"$/,'$1"');
+    }
+
+    document.querySelectorAll(".ops button").forEach(btn => btn.onclick = () => {
+      const A = totalInches(aft.value, ain.value, afr.value);
+      const B = totalInches(bft.value, bin.value, bfr.value);
+      const out = document.getElementById("ftOut");
+      const op = btn.dataset.op;
+      if (op === "+") out.textContent = fmt(A + B);
+      else if (op === "-") out.textContent = fmt(A - B);
+      else { const sqft = (A/12) * (B/12); out.textContent = sqft.toFixed(2) + " ft²"; }
+    });
+
+    function av(){
+      const L = parseFloat(document.getElementById("L").value)||0;
+      const W = parseFloat(document.getElementById("W").value)||0;
+      const H = parseFloat(document.getElementById("H").value);
+      let txt = "Area: " + (L*W).toFixed(2) + " ft²";
+      if (H) txt += " · Volume: " + (L*W*H).toFixed(2) + " ft³";
+      document.getElementById("avOut").textContent = (L||W) ? txt : "—";
+    }
+    ["L","W","H"].forEach(id => document.getElementById(id).oninput = av);
+
+    function concrete(){
+      const a = parseFloat(document.getElementById("cArea").value)||0;
+      const t = parseFloat(document.getElementById("cThk").value)||0;
+      if (!a || !t){ document.getElementById("cOut").textContent = "—"; return; }
+      const cuft = a * (t/12);
+      document.getElementById("cOut").textContent = (cuft/27).toFixed(2) + " yd³ (" + cuft.toFixed(1) + " ft³)";
+    }
+    ["cArea","cThk"].forEach(id => document.getElementById(id).oninput = concrete);
+
+    // shortcuts to elements used above
+    const aft=document.getElementById("aft"),ain=document.getElementById("ain"),afr=document.getElementById("afr");
+    const bft=document.getElementById("bft"),bin=document.getElementById("bin"),bfr=document.getElementById("bfr");
+  </script>
+</body>
+</html>
