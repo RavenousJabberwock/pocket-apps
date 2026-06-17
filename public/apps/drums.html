@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Drum Machine</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#0f172a;--fg:#e2e8f0;--card:#1e293b;--border:#334155;--accent:#f43f5e;--muted:#94a3b8;--on:#f43f5e;--beat:#fbbf24}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:680px;margin:0 auto;padding:14px}
+    .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+    button{font-size:14px;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    button.play{background:var(--accent);border-color:var(--accent);color:#fff;min-width:90px}
+    .tempo{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+    input[type=range]{width:130px}
+    .row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+    .label{width:56px;font-size:12px;color:var(--muted);flex:none}
+    .steps{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;flex:1}
+    .cell{aspect-ratio:1;border-radius:6px;background:#0b1324;border:1px solid var(--border)}
+    .cell.on{background:var(--on);border-color:var(--on)}
+    .cell.group{background:#16223d}
+    .cell.group.on{background:var(--on)}
+    .cell.cur{outline:2px solid var(--beat)}
+    @media(max-width:560px){.steps{grid-template-columns:repeat(8,1fr)} .row.cont{flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🥁 Drum Machine</h1></div>
+  <main>
+    <div class="controls">
+      <button class="play" id="play">▶ Play</button>
+      <button id="clear">Clear</button>
+      <div class="tempo"><span id="bpmLabel">120 BPM</span><input type="range" id="bpm" min="60" max="200" value="120"></div>
+    </div>
+    <div id="grid"></div>
+  </main>
+
+  <script>
+    /* ----- Web Audio drum synth (no samples needed) ----- */
+    let ctx;
+    function audio(){ return ctx || (ctx = new (window.AudioContext||window.webkitAudioContext)()); }
+
+    function kick(t){
+      const a=audio(),o=a.createOscillator(),g=a.createGain();
+      o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(50,t+.15);
+      g.gain.setValueAtTime(1,t); g.gain.exponentialRampToValueAtTime(.001,t+.3);
+      o.connect(g).connect(a.destination); o.start(t); o.stop(t+.3);
+    }
+    function snare(t){
+      const a=audio(),b=a.createBuffer(1,a.sampleRate*.2,a.sampleRate),d=b.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      const s=a.createBufferSource(); s.buffer=b;
+      const f=a.createBiquadFilter(); f.type="highpass"; f.frequency.value=1000;
+      const g=a.createGain(); g.gain.setValueAtTime(.7,t); g.gain.exponentialRampToValueAtTime(.001,t+.2);
+      s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t+.2);
+    }
+    function hat(t){
+      const a=audio(),b=a.createBuffer(1,a.sampleRate*.05,a.sampleRate),d=b.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      const s=a.createBufferSource(); s.buffer=b;
+      const f=a.createBiquadFilter(); f.type="highpass"; f.frequency.value=7000;
+      const g=a.createGain(); g.gain.setValueAtTime(.4,t); g.gain.exponentialRampToValueAtTime(.001,t+.05);
+      s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t+.05);
+    }
+    function clap(t){
+      const a=audio(),b=a.createBuffer(1,a.sampleRate*.2,a.sampleRate),d=b.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      const s=a.createBufferSource(); s.buffer=b;
+      const f=a.createBiquadFilter(); f.type="bandpass"; f.frequency.value=1500;
+      const g=a.createGain(); g.gain.setValueAtTime(.6,t); g.gain.exponentialRampToValueAtTime(.001,t+.18);
+      s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t+.18);
+    }
+
+    const TRACKS = [
+      { name: "Kick", fn: kick },
+      { name: "Snare", fn: snare },
+      { name: "Hat", fn: hat },
+      { name: "Clap", fn: clap },
+    ];
+    const STEPS = 16;
+    const KEY = "miniapps.drums";
+
+    // pattern[track][step] = boolean
+    let pattern = JSON.parse(localStorage.getItem(KEY) || "null") ||
+      TRACKS.map(() => Array(STEPS).fill(false));
+    const save = () => localStorage.setItem(KEY, JSON.stringify(pattern));
+
+    // Build the grid UI.
+    const grid = document.getElementById("grid");
+    TRACKS.forEach((tr, ti) => {
+      const row = document.createElement("div"); row.className = "row cont";
+      row.innerHTML = `<div class="label">${tr.name}</div>`;
+      const steps = document.createElement("div"); steps.className = "steps";
+      for (let s = 0; s < STEPS; s++) {
+        const c = document.createElement("div");
+        c.className = "cell" + (Math.floor(s/4)%2 ? " group" : "");
+        if (pattern[ti][s]) c.classList.add("on");
+        c.onclick = () => { pattern[ti][s] = !pattern[ti][s]; c.classList.toggle("on"); save(); };
+        steps.appendChild(c);
+      }
+      row.appendChild(steps); grid.appendChild(row);
+    });
+
+    /* ----- Sequencer playback loop ----- */
+    let playing = false, step = 0, timer = null, bpm = 120;
+    const bpmInput = document.getElementById("bpm");
+    bpmInput.oninput = () => { bpm = +bpmInput.value; document.getElementById("bpmLabel").textContent = bpm + " BPM"; if (playing) schedule(); };
+
+    function highlight(s){
+      document.querySelectorAll(".cell.cur").forEach(c => c.classList.remove("cur"));
+      document.querySelectorAll(".steps").forEach(row => row.children[s].classList.add("cur"));
+    }
+    function tick(){
+      const t = audio().currentTime + 0.02;
+      TRACKS.forEach((tr, ti) => { if (pattern[ti][step]) tr.fn(t); });
+      highlight(step);
+      step = (step + 1) % STEPS;
+    }
+    function schedule(){
+      clearInterval(timer);
+      const interval = (60 / bpm) / 4 * 1000; // 16th notes
+      timer = setInterval(tick, interval);
+    }
+    document.getElementById("play").onclick = (e) => {
+      audio().resume();
+      playing = !playing;
+      if (playing) { step = 0; tick(); schedule(); e.target.textContent = "⏸ Stop"; }
+      else { clearInterval(timer); e.target.textContent = "▶ Play"; document.querySelectorAll(".cell.cur").forEach(c=>c.classList.remove("cur")); }
+    };
+    document.getElementById("clear").onclick = () => {
+      pattern = TRACKS.map(() => Array(STEPS).fill(false)); save();
+      document.querySelectorAll(".cell.on").forEach(c => c.classList.remove("on"));
+    };
+  </script>
+</body>
+</html>
