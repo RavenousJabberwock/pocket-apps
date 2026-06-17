@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Period Tracker</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <script src="/apps/_register-sw.js" defer></script>
+  <style>
+    :root{--bg:#fdf2f8;--fg:#0f172a;--card:#fff;--border:#fbcfe8;--accent:#db2777;--muted:#9d174d}
+    @media (prefers-color-scheme:dark){:root{--bg:#1a0a14;--fg:#fce7f3;--card:#2a1020;--border:#4a1d38;--accent:#f472b6;--muted:#f9a8d4}}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh}
+    .bar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--border)}
+    .bar a{color:var(--accent);text-decoration:none;font-size:15px}.bar h1{font-size:16px;margin:0;flex:1}
+    main{max-width:480px;margin:0 auto;padding:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+    .big{font-size:20px;font-weight:700;color:var(--accent)}
+    .sub{color:var(--muted);font-size:13px;margin-top:4px}
+    .add{display:flex;gap:8px;margin-bottom:14px}
+    .add input{flex:1;padding:11px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    .add button{padding:11px 16px;border-radius:10px;border:0;background:var(--accent);color:#fff}
+    .settings{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted);margin-bottom:14px}
+    .settings input{width:60px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+    ul{list-style:none;margin:0;padding:0}
+    li{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)}
+    li button{border:0;background:none;color:var(--muted);font-size:18px}
+    .small{font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="bar"><a href="index.html">← Apps</a><h1>🌸 Period Tracker</h1></div>
+  <main>
+    <div class="card">
+      <div class="big" id="prediction">Log your first period below</div>
+      <div class="sub" id="cycleInfo"></div>
+    </div>
+    <form class="add" id="form">
+      <input id="date" type="date">
+      <button type="submit">Log start</button>
+    </form>
+    <div class="settings">Avg cycle length: <input id="cycle" type="number" value="28"> days</div>
+    <div class="card">
+      <strong>History</strong>
+      <ul id="list"></ul>
+    </div>
+    <p class="small">Predictions are estimates based on your average cycle length and are not medical advice. All data stays on your device.</p>
+  </main>
+
+  <script>
+    const KEY = "miniapps.period", CKEY = "miniapps.period.cycle";
+    let dates = JSON.parse(localStorage.getItem(KEY) || "[]"); // ISO date strings, newest last
+    let cycle = +(localStorage.getItem(CKEY) || 28);
+    document.getElementById("cycle").value = cycle;
+    document.getElementById("date").value = new Date().toISOString().slice(0,10);
+
+    const save = () => localStorage.setItem(KEY, JSON.stringify(dates));
+
+    function predict(){
+      dates.sort();
+      const pred = document.getElementById("prediction"), info = document.getElementById("cycleInfo");
+      if (!dates.length){ pred.textContent = "Log your first period below"; info.textContent = ""; return; }
+      // Average gap between logged starts (fallback to setting).
+      let avg = cycle;
+      if (dates.length >= 2){
+        let sum = 0; for (let i=1;i<dates.length;i++) sum += (new Date(dates[i]) - new Date(dates[i-1]))/86400000;
+        avg = Math.round(sum/(dates.length-1));
+      }
+      const last = new Date(dates[dates.length-1]);
+      const next = new Date(last); next.setDate(next.getDate() + avg);
+      const daysAway = Math.ceil((next - new Date())/86400000);
+      pred.textContent = "Next period ~ " + next.toDateString();
+      info.textContent = (daysAway >= 0 ? "in " + daysAway + " days" : Math.abs(daysAway) + " days ago") + " · avg cycle " + avg + " days";
+    }
+    function render(){
+      const list = document.getElementById("list");
+      list.innerHTML = dates.slice().reverse().map(d =>
+        `<li><span>${new Date(d).toDateString()}</span><button data-d="${d}">🗑</button></li>`).join("") || "<li class='small'>No entries yet</li>";
+      list.querySelectorAll("button").forEach(b => b.onclick = () => { dates = dates.filter(x => x !== b.dataset.d); save(); render(); predict(); });
+      predict();
+    }
+    document.getElementById("form").onsubmit = (e) => {
+      e.preventDefault(); const d = document.getElementById("date").value; if (!d) return;
+      if (!dates.includes(d)) dates.push(d); save(); render();
+    };
+    document.getElementById("cycle").onchange = (e) => { cycle = +e.target.value || 28; localStorage.setItem(CKEY, cycle); predict(); };
+    render();
+  </script>
+</body>
+</html>
