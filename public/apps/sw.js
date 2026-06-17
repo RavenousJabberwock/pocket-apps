@@ -10,7 +10,7 @@
  */
 
 // Bump this version string whenever you change cached files to force an update.
-const CACHE = "mini-apps-v1";
+const CACHE = "mini-apps-v2";
 
 // Everything that should be available offline.
 const ASSETS = [
