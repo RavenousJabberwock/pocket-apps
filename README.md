@@ -11,6 +11,8 @@ browser (`localStorage`).
 Open **`/apps/`** (served from `public/apps/index.html`). It shows a searchable,
 category-grouped grid linking to every app. The site root (`/`) redirects here.
 
+Alternatively, it's hosted here: https://pocket-apps.lovable.app
+
 ## Apps included
 
 ### Notes & Lists
